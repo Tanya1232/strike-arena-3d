@@ -1,0 +1,760 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Strike Arena 3D</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin:0; width:100%; height:100%; overflow:hidden;
+    background:#87ceeb; font-family:'Segoe UI',Arial,sans-serif;
+    touch-action:none; overscroll-behavior:none;
+  }
+  canvas { display:block; width:100%; height:100%; touch-action:none; }
+
+  #hud { position:fixed; inset:0; pointer-events:none; color:#fff; text-shadow:1px 1px 2px #000; }
+  #stats { position:absolute; left:20px; bottom:20px; display:flex; gap:15px; align-items:flex-end; }
+  .panel { background:rgba(0,0,0,.55); border-bottom:3px solid #ffaa00; padding:8px 14px; min-width:90px; }
+  .label { color:#aaa; font-size:9px; letter-spacing:1px; margin-bottom:2px; text-transform:uppercase; }
+  .value { font-size:24px; font-weight:bold; }
+  #ammoPanel { position:absolute; right:20px; bottom:20px; text-align:right; background:rgba(0,0,0,.55); border-bottom:3px solid #ffaa00; padding:10px 16px; }
+  #weaponName { font-size:11px; letter-spacing:1px; color:#aaa; margin-bottom:2px; text-transform:uppercase; }
+  #ammo { font-size:26px; font-weight:bold; }
+  #crosshair { position:absolute; left:50%; top:50%; width:16px; height:16px; transform:translate(-50%,-50%); }
+  #crosshair:before, #crosshair:after { content:""; position:absolute; background:#00ff00; box-shadow:0 0 2px #000; }
+  #crosshair:before { width:2px; height:16px; left:7px; top:0; }
+  #crosshair:after { height:2px; width:16px; top:7px; left:0; }
+  #hitmarker { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); color:#ffcc00; font-size:26px; opacity:0; font-weight:bold; }
+  #notice { position:absolute; bottom:90px; left:50%; transform:translateX(-50%); font-size:14px; color:#ffcc00; font-weight:bold; text-shadow:1px 1px 2px #000; letter-spacing:1px; text-align:center; }
+
+  #overlay { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(10,12,16,.85); z-index:50; text-align:center; padding:18px; }
+  #card { width:420px; max-width:100%; padding:30px; border-top:4px solid #ffaa00; background:rgba(20,24,33,.95); box-shadow:0 15px 40px rgba(0,0,0,.7); }
+  #card h1 { margin:0 0 5px; letter-spacing:3px; font-size:26px; color:#fff; }
+  #card .sub { color:#ffaa00; font-size:12px; letter-spacing:2px; margin-bottom:20px; text-transform:uppercase; }
+  #card p { color:#99aabb; line-height:1.5; font-size:13px; margin-bottom:25px; }
+  #start { pointer-events:auto; cursor:pointer; border:none; background:#ffaa00; color:#111; width:100%; padding:12px; font-weight:bold; letter-spacing:2px; font-size:14px; }
+  #start:hover { background:#ffbb22; }
+
+  #sniper-scope {
+    position:absolute; top:0; left:0; width:100%; height:100%;
+    background:rgba(0,0,0,.25); display:none; justify-content:center;
+    align-items:center; pointer-events:none; z-index:10;
+  }
+  #sniper-scope-circle {
+    position:absolute; width:min(520px,75vw,75vh); height:min(520px,75vw,75vh);
+    border:3px solid #000; border-radius:50%;
+    box-shadow:0 0 0 3000px rgba(0,0,0,.45);
+  }
+  .scope-line { position:absolute; background:#00ff00; }
+  #zoom-level { position:absolute; bottom:25px; color:#00ff00; font-size:16px; font-weight:bold; letter-spacing:2px; }
+
+  /* Сенсорное управление: отображается только на телефонах */
+  #mobileControls { display:none; position:fixed; inset:0; z-index:20; pointer-events:none; user-select:none; }
+  #lookArea {
+    position:absolute; left:35%; right:0; top:0; bottom:0;
+    pointer-events:auto; touch-action:none; background:transparent;
+  }
+  #moveArea {
+    position:absolute; left:0; bottom:0; width:48%; height:58%;
+    pointer-events:auto; touch-action:none;
+  }
+  #joystickBase {
+    position:absolute; left:24px; bottom:calc(26px + env(safe-area-inset-bottom));
+    width:138px; height:138px; border-radius:50%;
+    border:2px solid rgba(255,255,255,.55);
+    background:rgba(0,0,0,.25); box-shadow:0 0 15px rgba(0,0,0,.2);
+    pointer-events:none;
+  }
+  #joystickKnob {
+    position:absolute; left:50%; top:50%; width:58px; height:58px;
+    border-radius:50%; transform:translate(-50%,-50%);
+    background:rgba(255,170,0,.75); border:2px solid rgba(255,255,255,.8);
+  }
+  .touchBtn {
+    pointer-events:auto; touch-action:none; user-select:none;
+    border:2px solid rgba(255,255,255,.7); color:#fff;
+    background:rgba(15,20,28,.72); border-radius:50%;
+    width:56px; height:56px; display:flex; align-items:center;
+    justify-content:center; text-align:center; font-size:11px;
+    font-weight:800; text-shadow:1px 1px 2px #000;
+    box-shadow:0 3px 10px rgba(0,0,0,.3);
+    padding:3px; line-height:1.05;
+  }
+  .touchBtn.active { background:rgba(255,170,0,.85); color:#111; text-shadow:none; }
+  #actionButtons { position:absolute; right:12px; bottom:calc(16px + env(safe-area-inset-bottom)); width:190px; height:235px; pointer-events:none; }
+  #fireBtn { position:absolute; right:8px; bottom:68px; width:76px; height:76px; font-size:14px; background:rgba(170,30,20,.78); }
+  #jumpBtn { position:absolute; right:0; bottom:0; }
+  #crouchBtn { position:absolute; right:62px; bottom:0; }
+  #reloadBtn { position:absolute; right:0; bottom:151px; }
+  #silentBtn { position:absolute; right:65px; bottom:151px; }
+  #scopeBtn { position:absolute; right:67px; bottom:75px; }
+  #weaponButtons { position:absolute; top:calc(12px + env(safe-area-inset-top)); right:10px; display:flex; gap:6px; pointer-events:auto; }
+  #weaponButtons .touchBtn { width:42px; height:42px; border-radius:12px; font-size:13px; }
+  #grenadeBtn { position:absolute; left:calc(50% - 27px); bottom:calc(16px + env(safe-area-inset-bottom)); }
+  #mobileHint {
+    position:absolute; left:50%; top:calc(12px + env(safe-area-inset-top));
+    transform:translateX(-50%); color:#fff; font-size:10px;
+    background:rgba(0,0,0,.4); border-radius:8px; padding:5px 8px;
+    white-space:nowrap; text-shadow:1px 1px 2px #000;
+  }
+
+  @media (pointer:coarse), (max-width:800px) {
+    #mobileControls.enabled { display:block; }
+    #stats { left:8px; bottom:8px; gap:5px; }
+    .panel { min-width:0; padding:5px 7px; }
+    .label { font-size:8px; }
+    .value { font-size:18px; }
+    #ammoPanel { right:8px; bottom:8px; padding:6px 9px; }
+    #weaponName { font-size:9px; }
+    #ammo { font-size:19px; }
+    #notice { bottom:105px; width:80%; font-size:12px; }
+    #card { padding:23px 18px; }
+    #card h1 { font-size:22px; }
+  }
+  @media (orientation:landscape) and (pointer:coarse) {
+    #joystickBase { width:115px; height:115px; left:20px; bottom:18px; }
+    #joystickKnob { width:50px; height:50px; }
+    #actionButtons { transform:scale(.88); transform-origin:bottom right; right:8px; bottom:8px; }
+    #grenadeBtn { bottom:12px; }
+    #weaponButtons { top:8px; }
+    #mobileHint { top:8px; }
+    #stats { bottom:6px; }
+    #ammoPanel { bottom:6px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="hud">
+  <div id="crosshair"></div><div id="hitmarker">X</div>
+  <div id="stats">
+    <div class="panel"><div class="label">Здоровье</div><div class="value" id="hp">100</div></div>
+    <div class="panel"><div class="label">Броня</div><div class="value">0</div></div>
+    <div class="panel"><div class="label">Убийства</div><div class="value" id="kills">0</div></div>
+  </div>
+  <div id="ammoPanel"><div id="weaponName">Пистолет</div><div id="ammo">12 / 60</div><div class="label" id="reloadLabel"></div></div>
+  <div id="notice"></div>
+</div>
+
+<div id="mobileControls">
+  <div id="lookArea"></div>
+  <div id="moveArea"><div id="joystickBase"><div id="joystickKnob"></div></div></div>
+  <div id="mobileHint">ЛЕВАЯ СТОРОНА — ДВИЖЕНИЕ · ПРАВАЯ — ОБЗОР</div>
+  <div id="weaponButtons">
+    <button class="touchBtn" data-weapon="1">1</button>
+    <button class="touchBtn" data-weapon="2">2</button>
+    <button class="touchBtn" data-weapon="3">3</button>
+    <button class="touchBtn" data-weapon="4">4</button>
+  </div>
+  <div id="actionButtons">
+    <button class="touchBtn" id="fireBtn">ОГОНЬ</button>
+    <button class="touchBtn" id="jumpBtn">ПРЫЖОК</button>
+    <button class="touchBtn" id="crouchBtn">ПРИСЕСТЬ</button>
+    <button class="touchBtn" id="reloadBtn">ЗАРЯД</button>
+    <button class="touchBtn" id="silentBtn">ТИХО</button>
+    <button class="touchBtn" id="scopeBtn">ПРИЦЕЛ</button>
+  </div>
+  <button class="touchBtn" id="grenadeBtn">ГРАНАТА</button>
+</div>
+
+<div id="overlay">
+  <div id="card">
+    <h1>STRIKE ARENA 3D</h1>
+    <div class="sub">Tactical Combat Simulator</div>
+    <p id="introText">Уничтожайте вражеские цели на полигоне. Используйте различное вооружение, гранаты и тактические укрытия.</p>
+    <button id="start">ПОДКЛЮЧИТЬСЯ</button>
+  </div>
+</div>
+
+<div id="sniper-scope">
+  <div id="sniper-scope-circle"></div>
+  <div class="scope-line" style="width:100%;height:1px;"></div>
+  <div class="scope-line" style="width:1px;height:100%;"></div>
+  <div id="zoom-level">ЗУМ: x4</div>
+</div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+/* Автоматическое определение мобильного устройства */
+const isMobile = matchMedia('(pointer:coarse)').matches ||
+  /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+
+const mobileControls = document.getElementById('mobileControls');
+if (isMobile) {
+  mobileControls.classList.add('enabled');
+  document.getElementById('introText').textContent =
+    'Управление: джойстик слева, свайп справа — обзор. Используйте экранные кнопки для стрельбы, прыжка, приседания, оружия и гранат.';
+}
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87ceeb);
+scene.fog = new THREE.Fog(0x87ceeb, 70, 220);
+
+const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 300);
+camera.rotation.order = 'YXZ';
+
+const renderer = new THREE.WebGLRenderer({ antialias:true, powerPreference:'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, isMobile ? 1.35 : 1.7));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0x87ceeb, 0x8b7d6b, 1.8));
+
+const sun = new THREE.DirectionalLight(0xfff5cc, 3.2);
+sun.position.set(-60, 90, 45);
+sun.castShadow = true;
+sun.shadow.mapSize.set(isMobile ? 1024 : 2048, isMobile ? 1024 : 2048);
+sun.shadow.camera.left = -110; sun.shadow.camera.right = 110;
+sun.shadow.camera.top = 110; sun.shadow.camera.bottom = -110;
+sun.shadow.bias = -0.0003;
+scene.add(sun);
+
+const sunMesh = new THREE.Mesh(new THREE.SphereGeometry(6,16,16), new THREE.MeshBasicMaterial({color:0xffffaa}));
+sunMesh.position.copy(sun.position);
+scene.add(sunMesh);
+
+function createCloud(x,y,z) {
+  const group = new THREE.Group();
+  const cloudMat = new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.85});
+  for(let i=0;i<5;i++){
+    const part = new THREE.Mesh(new THREE.SphereGeometry(6+Math.random()*4,8,8),cloudMat);
+    part.position.set(i*5-10,Math.random()*2,Math.random()*4);
+    group.add(part);
+  }
+  group.position.set(x,y,z); scene.add(group);
+}
+createCloud(-40,60,-80); createCloud(50,70,-40); createCloud(10,65,80);
+
+const mat = (color,roughness=1)=>new THREE.MeshStandardMaterial({color,roughness,metalness:0});
+const houseWallMat=mat(0xd2b48c), houseRoofMat=mat(0x8b4513), windowMat=mat(0x223344);
+const treeTrunkMat=mat(0x5c4033), treeLeavesMat=mat(0x2e8b57);
+const crateMat=mat(0x87603a), metal=mat(0x35383a,.7), gunMat=mat(0x242728,.45);
+const botRed=mat(0x9c2920), botDark=mat(0x352f2a), skin=mat(0xc59a72);
+
+function createRealisticGroundTexture(){
+  const canvas=document.createElement('canvas'); canvas.width=512; canvas.height=512;
+  const ctx=canvas.getContext('2d'); ctx.fillStyle='#c4a56c'; ctx.fillRect(0,0,512,512);
+  for(let i=0;i<25000;i++){
+    const x=Math.random()*512,y=Math.random()*512,shade=Math.floor(Math.random()*50-25);
+    ctx.fillStyle=`rgba(${196+shade},${165+shade},${108+shade},0.3)`;
+    ctx.fillRect(x,y,2,2);
+  }
+  ctx.strokeStyle='#82643a'; ctx.lineWidth=1.5;
+  for(let i=0;i<=512;i+=64){
+    ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i,512);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(0,i);ctx.lineTo(512,i);ctx.stroke();
+  }
+  const texture=new THREE.CanvasTexture(canvas);
+  texture.wrapS=THREE.RepeatWrapping; texture.wrapT=THREE.RepeatWrapping;
+  texture.repeat.set(80,80); return texture;
+}
+const groundMat=new THREE.MeshStandardMaterial({map:createRealisticGroundTexture(),roughness:.9,metalness:.05});
+const floor=new THREE.Mesh(new THREE.PlaneGeometry(360,360),groundMat);
+floor.rotation.x=-Math.PI/2; floor.receiveShadow=true; floor.position.y=-.05; scene.add(floor);
+
+const worldColliders=[];
+function box(x,y,z,sx,sy,sz,material,collide=true,cast=true){
+  const m=new THREE.Mesh(new THREE.BoxGeometry(sx,sy,sz),material);
+  m.position.set(x,y,z);m.castShadow=cast;m.receiveShadow=true;scene.add(m);
+  if(collide)worldColliders.push(m);return m;
+}
+box(0,3.5,-50,110,7,3,houseWallMat,true);
+box(0,3.5,50,110,7,3,houseWallMat,true);
+box(-55,3.5,0,3,7,100,houseWallMat,true);
+box(55,3.5,0,3,7,100,houseWallMat,true);
+
+function createHouse(x,z,w,h,d){
+  box(x,h/2,z,w,h,d,houseWallMat,true);
+  box(x,h+.3,z,w+.6,.6,d+.6,houseRoofMat,true);
+  box(x-w/4,h/1.8,z+d/2+.05,1.2,1.5,.1,windowMat,false);
+  box(x+w/4,h/1.8,z+d/2+.05,1.2,1.5,.1,windowMat,false);
+  box(x,h/3,z+d/2+.05,1.6,2.5,.1,mat(0x221100),false);
+}
+createHouse(-30,-25,14,6,12);createHouse(30,-25,14,6,12);
+createHouse(-30,20,16,7,14);createHouse(30,20,16,7,14);
+
+function createTree(x,z){
+  box(x,2.5,z,.8,5,.8,treeTrunkMat,true);
+  const leaves=new THREE.Mesh(new THREE.DodecahedronGeometry(2.5,1),treeLeavesMat);
+  leaves.position.set(x,5.5,z);leaves.castShadow=true;scene.add(leaves);
+}
+createTree(-15,-15);createTree(15,-15);createTree(-15,10);createTree(15,10);
+function crate(x,y,z,s=3.5){box(x,y+s/2,z,s,s,s,crateMat,true);}
+crate(-8,0,-12,3.5);crate(8,0,-12,3.5);crate(-8,0,12,3.5);crate(8,0,12,3.5);
+
+const weaponRoot=new THREE.Group();camera.add(weaponRoot);scene.add(camera);
+const weaponParts=new THREE.Group();weaponRoot.add(weaponParts);
+const weaponMeshGroup=new THREE.Group();weaponParts.add(weaponMeshGroup);
+let currentGunMeshParts=[];
+const weaponDefs={
+  1:{name:'Пистолет',clipSize:12,reserve:60,damage:34,delay:330,reload:1150,auto:false,spread:.004},
+  2:{name:'Автомат',clipSize:30,reserve:90,damage:22,delay:105,reload:1750,auto:true,spread:.012},
+  3:{name:'Снайперская винтовка',clipSize:10,reserve:30,damage:200,delay:1050,reload:2200,auto:false,spread:.0008},
+  4:{name:'Граната',clipSize:1,reserve:5,damage:180,delay:1000,reload:800,auto:false,spread:0}
+};
+const weapons={};
+for(const k of Object.keys(weaponDefs))weapons[k]={...weaponDefs[k],clip:weaponDefs[k].clipSize,reloading:false,lastShot:0};
+let activeWeapon=1,isFiring=false,reloadTimer=0,muzzleTimer=0,recoil=0;
+let scopeZoomState=0;
+
+const muzzle=new THREE.Mesh(new THREE.SphereGeometry(.085,8,6),new THREE.MeshBasicMaterial({color:0xffd36b,transparent:true,opacity:.95}));
+muzzle.position.set(.25,-.2,-1.2);muzzle.visible=false;weaponParts.add(muzzle);
+const muzzleLight=new THREE.PointLight(0xffa53a,0,3);muzzleLight.position.copy(muzzle.position);weaponParts.add(muzzleLight);
+
+function buildWeaponModel(id){
+  currentGunMeshParts.forEach(m=>weaponMeshGroup.remove(m));currentGunMeshParts=[];
+  const addPart=(x,y,z,sx,sy,sz,matRef,rx=0,ry=0,rz=0)=>{
+    const m=new THREE.Mesh(new THREE.BoxGeometry(sx,sy,sz),matRef);
+    m.position.set(x,y,z);m.rotation.set(rx,ry,rz);weaponMeshGroup.add(m);currentGunMeshParts.push(m);return m;
+  };
+  if(id===1){
+    addPart(.25,-.24,-.55,.14,.18,.48,gunMat);
+    addPart(.25,-.13,-.65,.08,.04,.12,metal);
+    addPart(.25,-.38,-.48,.12,.24,.15,mat(0x352f2a),0,0,.2);
+    addPart(.25,-.21,-.72,.06,.06,.22,metal);muzzle.position.set(.25,-.21,-.85);
+  }else if(id===2){
+    addPart(.26,-.22,-.65,.15,.17,.75,gunMat);
+    addPart(.26,-.35,-.50,.12,.35,.16,mat(0x352f2a));
+    addPart(.26,-.22,-1.02,.08,.08,.45,metal);muzzle.position.set(.26,-.22,-1.25);
+  }else if(id===3){
+    addPart(.26,-.20,-.75,.13,.15,1.1,gunMat);
+    addPart(.26,-.07,-.75,.11,.12,.35,metal);
+    addPart(.26,-.36,-.60,.10,.30,.14,mat(0x352f2a));
+    addPart(.26,-.20,-1.35,.06,.06,.70,metal);muzzle.position.set(.26,-.20,-1.72);
+  }else if(id===4){
+    const nade=new THREE.Mesh(new THREE.DodecahedronGeometry(.14,1),mat(0x2d4a25));
+    nade.position.set(.25,-.22,-.5);weaponMeshGroup.add(nade);currentGunMeshParts.push(nade);
+  }
+  muzzleLight.position.copy(muzzle.position);
+}
+function setWeapon(id){
+  if(scopeZoomState!==0&&activeWeapon===3)resetScope();
+  activeWeapon=id;buildWeaponModel(id);updateHUD();
+}
+
+const raycaster=new THREE.Raycaster(),center=new THREE.Vector2(0,0),keys={};
+let yaw=0,pitch=0,velY=0,onGround=true,crouched=false,walkTime=0;
+const player={pos:new THREE.Vector3(0,0,35),height:1.7,radius:.38,hp:100,kills:0};
+camera.position.set(player.pos.x,player.height,player.pos.z);
+const clock=new THREE.Clock(),botMeshes=[],bots=[];
+const botSpawnPoints=[[-30,0,-30],[30,0,-30],[-30,0,4],[30,0,4],[0,0,-15],[-15,0,25],[15,0,25]];
+
+function makeBot(index){
+  const root=new THREE.Group(),parts=[];
+  function part(geo,material,x,y,z,sx=1,sy=1,sz=1){
+    const m=new THREE.Mesh(geo,material);m.position.set(x,y,z);m.scale.set(sx,sy,sz);
+    m.castShadow=true;m.receiveShadow=true;root.add(m);parts.push(m);return m;
+  }
+  const torso=part(new THREE.BoxGeometry(.55,.72,.3),botRed,0,1.18,0);
+  part(new THREE.BoxGeometry(.56,.12,.32),botDark,0,.78,0);
+  part(new THREE.SphereGeometry(.22,8,6),skin,0,1.76,0,1,1.05,.95);
+  const armL=part(new THREE.BoxGeometry(.17,.62,.19),botRed,-.39,1.19,0);
+  const armR=part(new THREE.BoxGeometry(.17,.62,.19),botRed,.39,1.19,0);
+  const legL=part(new THREE.BoxGeometry(.2,.65,.23),botDark,-.16,.37,0);
+  const legR=part(new THREE.BoxGeometry(.2,.65,.23),botDark,.16,.37,0);
+  const b={root,parts,torso,armL,armR,legL,legR,hp:100,alive:true,respawnAt:0,dir:Math.random()*Math.PI*2,turnTimer:Math.random()*3,hitUntil:0,spawnIndex:index,walk:Math.random()*4};
+  root.position.set(botSpawnPoints[index][0],0,botSpawnPoints[index][2]);
+  root.traverse(o=>{if(o.isMesh){o.userData.bot=b;botMeshes.push(o);}});
+  scene.add(root);bots.push(b);
+}
+for(let i=0;i<7;i++)makeBot(i);
+
+function updateHUD(){
+  const w=weapons[activeWeapon];
+  document.getElementById('hp').textContent=Math.max(0,Math.round(player.hp));
+  document.getElementById('kills').textContent=player.kills;
+  document.getElementById('weaponName').textContent=w.name;
+  document.getElementById('ammo').textContent=activeWeapon===4?`${w.reserve} ГРК`:`${w.clip} / ${w.reserve}`;
+  document.getElementById('reloadLabel').textContent=w.reloading?'ПЕРЕЗАРЯДКА…':'';
+}
+const overlay=document.getElementById('overlay'),notice=document.getElementById('notice');
+let noticeTimeout=0;
+function showNotice(text){
+  notice.textContent=text;clearTimeout(noticeTimeout);
+  noticeTimeout=setTimeout(()=>notice.textContent='',1700);
+}
+
+let audioCtx=null,masterGain=null;
+function initAudio(){
+  if(audioCtx)return;
+  audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+  masterGain=audioCtx.createGain();masterGain.gain.value=1.2;masterGain.connect(audioCtx.destination);
+}
+function tone(freq,duration,type='square',volume=.4){
+  if(!audioCtx)return;
+  const now=audioCtx.currentTime,o=audioCtx.createOscillator(),g=audioCtx.createGain();
+  o.type=type;o.frequency.setValueAtTime(freq,now);
+  g.gain.setValueAtTime(volume,now);g.gain.exponentialRampToValueAtTime(.001,now+duration);
+  o.connect(g);g.connect(masterGain);o.start(now);o.stop(now+duration+.01);
+}
+function noise(duration,volume=.35){
+  if(!audioCtx)return;
+  const len=Math.max(1,Math.floor(audioCtx.sampleRate*duration));
+  const buf=audioCtx.createBuffer(1,len,audioCtx.sampleRate),data=buf.getChannelData(0);
+  for(let i=0;i<len;i++)data[i]=(Math.random()*2-1)*(1-i/len);
+  const src=audioCtx.createBufferSource(),f=audioCtx.createBiquadFilter(),g=audioCtx.createGain();
+  src.buffer=buf;f.type='lowpass';f.frequency.value=1500;g.gain.value=volume;
+  src.connect(f);f.connect(g);g.connect(masterGain);src.start();
+}
+function soundShot(id){
+  if(id===1){tone(180,.09,'square',.5);noise(.07,.35);}
+  else if(id===2){tone(120,.065,'sawtooth',.45);noise(.06,.4);}
+  else if(id===3){tone(80,.22,'sawtooth',.6);noise(.2,.5);}
+  else if(id===4){tone(90,.4,'sawtooth',.7);noise(.45,.6);}
+}
+function startReload(){
+  const w=weapons[activeWeapon];
+  if(w.reloading||w.clip===w.clipSize||w.reserve<=0||activeWeapon===4)return;
+  w.reloading=true;reloadTimer=w.reload/1000;isFiring=false;updateHUD();
+}
+function finishReload(w){
+  const amount=Math.min(w.clipSize-w.clip,w.reserve);
+  w.clip+=amount;w.reserve-=amount;w.reloading=false;updateHUD();
+}
+
+const transient=[];
+function addTracer(start,end){
+  const geo=new THREE.BufferGeometry().setFromPoints([start,end]);
+  const line=new THREE.Line(geo,new THREE.LineBasicMaterial({color:0xffd58b,transparent:true,opacity:.85}));
+  scene.add(line);transient.push({obj:line,life:.065,max:.065});
+}
+function addImpact(point,normal){
+  const mark=new THREE.Mesh(new THREE.PlaneGeometry(.16,.16),new THREE.MeshBasicMaterial({color:0x302a20,side:THREE.DoubleSide,depthWrite:false}));
+  mark.position.copy(point).addScaledVector(normal,.012);
+  mark.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),normal);
+  scene.add(mark);transient.push({obj:mark,life:7,max:7});
+  const sparks=new THREE.Mesh(new THREE.TetrahedronGeometry(.07,0),new THREE.MeshBasicMaterial({color:0xffc56d}));
+  sparks.position.copy(point).addScaledVector(normal,.05);scene.add(sparks);
+  transient.push({obj:sparks,life:.15,max:.15});
+}
+function hitFlash(){
+  const h=document.getElementById('hitmarker');h.style.opacity='1';
+  setTimeout(()=>h.style.opacity='0',110);
+}
+function toggleScopeNextState(){
+  if(activeWeapon!==3)return;
+  scopeZoomState=(scopeZoomState+1)%3;
+  const scopeUI=document.getElementById('sniper-scope');
+  const crosshair=document.getElementById('crosshair');
+  const zoomText=document.getElementById('zoom-level');
+  if(scopeZoomState===1){
+    scopeUI.style.display='flex';crosshair.style.display='none';camera.fov=25;
+    zoomText.textContent='ЗУМ: x4';weaponMeshGroup.visible=false;
+  }else if(scopeZoomState===2){
+    scopeUI.style.display='flex';crosshair.style.display='none';camera.fov=10;
+    zoomText.textContent='ЗУМ: x10';weaponMeshGroup.visible=false;
+  }else resetScope();
+  camera.updateProjectionMatrix();
+}
+function resetScope(){
+  scopeZoomState=0;
+  document.getElementById('sniper-scope').style.display='none';
+  document.getElementById('crosshair').style.display='block';
+  camera.fov=75;weaponMeshGroup.visible=true;camera.updateProjectionMatrix();
+}
+
+const activeGrenades=[];
+function throwGrenade(){
+  const w=weapons[4];
+  if(w.reserve<=0){showNotice('ГРАНАТ БОЛЬШЕ НЕТ!');return;}
+  w.reserve--;updateHUD();
+  const nadeMesh=new THREE.Mesh(new THREE.DodecahedronGeometry(.18,1),mat(0x2d4a25));
+  const pos=camera.position.clone().add(new THREE.Vector3(0,-.2,-.5).applyQuaternion(camera.quaternion));
+  nadeMesh.position.copy(pos);scene.add(nadeMesh);
+  const dir=new THREE.Vector3();camera.getWorldDirection(dir);
+  const velocity=dir.multiplyScalar(18).add(new THREE.Vector3(0,5,0));
+  activeGrenades.push({mesh:nadeMesh,vel:velocity,timer:2.2});
+}
+function explodeGrenade(pos){
+  soundShot(4);
+  const flash=new THREE.Mesh(new THREE.SphereGeometry(3,12,12),new THREE.MeshBasicMaterial({color:0xffaa33,transparent:true,opacity:.9}));
+  flash.position.copy(pos);scene.add(flash);transient.push({obj:flash,life:.2,max:.2});
+  bots.forEach(bot=>{
+    if(bot.alive){
+      const dist=bot.root.position.distanceTo(pos);
+      if(dist<=10){
+        bot.hp-=Math.round((1-dist/10)*180);hitFlash();
+        if(bot.hp<=0)killBot(bot);
+      }
+    }
+  });
+}
+
+function shoot(){
+  const w=weapons[activeWeapon],now=performance.now();
+  if((!isMobile&&!document.pointerLockElement)||w.reloading||now-w.lastShot<w.delay)return;
+  if(activeWeapon===4){w.lastShot=now;throwGrenade();return;}
+  if(w.clip<=0){showNotice('МАГАЗИН ПУСТ — НАЖМИТЕ R');return;}
+  w.lastShot=now;w.clip--;recoil=Math.min(recoil+.045,.13);
+  muzzle.visible=true;muzzleTimer=.055;muzzleLight.intensity=4;
+  soundShot(activeWeapon);updateHUD();
+  raycaster.setFromCamera(center,camera);
+  const spread=scopeZoomState>0?.0001:w.spread;
+  raycaster.ray.direction.x+=(Math.random()-.5)*spread;
+  raycaster.ray.direction.y+=(Math.random()-.5)*spread;
+  raycaster.ray.direction.z+=(Math.random()-.5)*spread;
+  raycaster.ray.direction.normalize();
+  const hits=raycaster.intersectObjects([...worldColliders,...botMeshes.filter(m=>m.userData.bot?.alive)],false);
+  const origin=camera.position.clone().add(new THREE.Vector3(.22,-.18,-.45).applyQuaternion(camera.quaternion));
+  const end=hits.length?hits[0].point:raycaster.ray.origin.clone().addScaledVector(raycaster.ray.direction,120);
+  addTracer(origin,end);
+  if(hits.length){
+    const hit=hits[0],bot=hit.object.userData.bot;
+    if(bot&&bot.alive){
+      bot.hp-=w.damage;hitFlash();if(bot.hp<=0)killBot(bot);
+    }else{
+      const normal=hit.face?hit.face.normal.clone().transformDirection(hit.object.matrixWorld):new THREE.Vector3(0,1,0);
+      addImpact(hit.point,normal);
+    }
+  }
+}
+function killBot(bot){
+  bot.alive=false;bot.respawnAt=performance.now()+5000;player.kills++;updateHUD();
+  bot.root.rotation.z=Math.PI/2;bot.root.position.y=.15;showNotice('ЦЕЛЬ УНИЧТОЖЕНА');
+}
+function respawnBot(bot){
+  bot.alive=true;bot.hp=100;bot.root.rotation.set(0,0,0);
+  bot.root.position.set(botSpawnPoints[bot.spawnIndex][0],0,botSpawnPoints[bot.spawnIndex][2]);
+  bot.dir=Math.random()*Math.PI*2;
+}
+function blockedAt(x,z,r=.42){
+  if(x<-53||x>53||z<-48||z>48)return true;
+  const origin=new THREE.Vector3(x,1,z);
+  for(const d of [new THREE.Vector3(1,0,0),new THREE.Vector3(-1,0,0),new THREE.Vector3(0,0,1),new THREE.Vector3(0,0,-1)]){
+    raycaster.set(origin,d);raycaster.far=r;
+    if(raycaster.intersectObjects(worldColliders,false).length)return true;
+  }
+  raycaster.far=Infinity;return false;
+}
+function updateBots(dt,t){
+  for(const b of bots){
+    if(!b.alive){if(t>=b.respawnAt)respawnBot(b);continue;}
+    b.turnTimer-=dt;
+    if(b.turnTimer<=0){b.turnTimer=1.5+Math.random()*3;b.dir+=(Math.random()-.5)*2.2;}
+    const speed=.55,nx=b.root.position.x+Math.sin(b.dir)*speed*dt,nz=b.root.position.z+Math.cos(b.dir)*speed*dt;
+    if(!blockedAt(nx,nz,.35)){b.root.position.x=nx;b.root.position.z=nz;}else b.dir+=Math.PI;
+    b.walk+=dt*5;b.legL.rotation.x=Math.sin(b.walk)*.35;b.legR.rotation.x=-Math.sin(b.walk)*.35;
+    b.root.rotation.y=b.dir;
+  }
+}
+
+/* Движение использует одни и те же игровые клавиши на ПК и телефоне */
+function updateMovement(dt){
+  const forward=new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
+  const right=new THREE.Vector3(Math.cos(yaw),0,-Math.sin(yaw));
+  const dir=new THREE.Vector3();
+  if(keys.KeyW)dir.add(forward);if(keys.KeyS)dir.sub(forward);
+  if(keys.KeyD)dir.add(right);if(keys.KeyA)dir.sub(right);
+  if(dir.lengthSq()>0)dir.normalize();
+  crouched=!!(keys.ControlLeft||keys.ControlRight);
+  const baseSpeed=(keys.ShiftLeft||keys.ShiftRight)?3:5.8;
+  const speed=(crouched?2.3:baseSpeed)*(scopeZoomState>0?.4:1);
+  const nx=player.pos.x+dir.x*speed*dt,nz=player.pos.z+dir.z*speed*dt;
+  if(!blockedAt(nx,player.pos.z,player.radius))player.pos.x=nx;
+  if(!blockedAt(player.pos.x,nz,player.radius))player.pos.z=nz;
+  if(keys.Space&&onGround){velY=5.7;onGround=false;keys.Space=false;}
+  velY-=15*dt;player.pos.y+=velY*dt;
+  if(player.pos.y<0){player.pos.y=0;velY=0;onGround=true;}
+  camera.position.set(player.pos.x,player.pos.y+(crouched?1.08:1.7),player.pos.z);
+  camera.rotation.set(pitch-recoil,yaw,0,'YXZ');
+  recoil=Math.max(0,recoil-dt*.22);
+}
+function updateWeapon(dt){
+  const w=weapons[activeWeapon];
+  if(w.reloading){reloadTimer-=dt;if(reloadTimer<=0)finishReload(w);}
+  if(muzzleTimer>0){muzzleTimer-=dt;if(muzzleTimer<=0){muzzle.visible=false;muzzleLight.intensity=0;}}
+  if(isFiring&&(w.auto||!w._heldShot))shoot();
+  if(!isFiring)w._heldShot=false;
+  for(let i=activeGrenades.length-1;i>=0;i--){
+    const g=activeGrenades[i];g.timer-=dt;g.vel.y-=14*dt;g.mesh.position.addScaledVector(g.vel,dt);
+    if(g.mesh.position.y<=.15){g.mesh.position.y=.15;g.vel.y=-g.vel.y*.55;g.vel.x*=.7;g.vel.z*=.7;}
+    if(g.timer<=0){explodeGrenade(g.mesh.position);scene.remove(g.mesh);activeGrenades.splice(i,1);}
+  }
+}
+function animate(){
+  requestAnimationFrame(animate);
+  const dt=Math.min(clock.getDelta(),.04),t=performance.now();
+  updateMovement(dt);updateBots(dt,t);updateWeapon(dt);
+  for(let i=transient.length-1;i>=0;i--){
+    const e=transient[i];e.life-=dt;
+    if(e.obj.material)e.obj.material.opacity=Math.max(0,e.life/e.max*.85);
+    if(e.life<=0){scene.remove(e.obj);transient.splice(i,1);}
+  }
+  renderer.render(scene,camera);
+}
+setWeapon(1);animate();
+
+/* Запуск: на компьютере включаем Pointer Lock, на телефоне играем касаниями */
+document.getElementById('start').addEventListener('click',()=>{
+  initAudio();if(audioCtx.state==='suspended')audioCtx.resume();
+  if(isMobile){
+    overlay.style.display='none';
+    if(document.documentElement.requestFullscreen && !document.fullscreenElement){
+      document.documentElement.requestFullscreen().catch(()=>{});
+    }
+  }else{
+    renderer.domElement.requestPointerLock();
+  }
+});
+document.addEventListener('pointerlockchange',()=>{
+  if(isMobile)return;
+  const locked=document.pointerLockElement===renderer.domElement;
+  overlay.style.display=locked?'none':'flex';
+  if(!locked){isFiring=false;if(scopeZoomState>0)resetScope();}
+});
+document.addEventListener('mousemove',e=>{
+  if(!document.pointerLockElement)return;
+  const sens=scopeZoomState===2?.0003:(scopeZoomState===1?.0008:.0022);
+  yaw-=e.movementX*sens;pitch-=e.movementY*sens;
+  pitch=Math.max(-1.48,Math.min(1.48,pitch));
+});
+document.addEventListener('keydown',e=>{
+  if(['Space','ControlLeft','ControlRight','ShiftLeft','ShiftRight'].includes(e.code))e.preventDefault();
+  keys[e.code]=true;if(e.repeat)return;
+  if(e.code==='Digit1')setWeapon(1);
+  if(e.code==='Digit2')setWeapon(2);
+  if(e.code==='Digit3')setWeapon(3);
+  if(e.code==='Digit4'||e.code==='KeyG')setWeapon(4);
+  if(e.code==='KeyR')startReload();
+});
+document.addEventListener('keyup',e=>{keys[e.code]=false;});
+document.addEventListener('mousedown',e=>{
+  if(e.button===0){
+    if(document.pointerLockElement){
+      isFiring=true;const w=weapons[activeWeapon];
+      if(!w.auto){shoot();w._heldShot=true;}
+    }
+  }else if(e.button===2){
+    if(document.pointerLockElement&&activeWeapon===3)toggleScopeNextState();
+  }
+});
+document.addEventListener('mouseup',e=>{if(e.button===0)isFiring=false;});
+document.addEventListener('contextmenu',e=>e.preventDefault());
+
+/* Сенсорный джойстик */
+const moveArea=document.getElementById('moveArea');
+const joystickBase=document.getElementById('joystickBase');
+const joystickKnob=document.getElementById('joystickKnob');
+let joystickPointer=null,joyCenterX=0,joyCenterY=0;
+const joyRadius=43;
+
+function updateJoystick(clientX,clientY){
+  const dx=clientX-joyCenterX,dy=clientY-joyCenterY;
+  const length=Math.hypot(dx,dy),scale=length>joyRadius?joyRadius/length:1;
+  const x=dx*scale,y=dy*scale;
+  joystickKnob.style.left=`calc(50% + ${x}px)`;
+  joystickKnob.style.top=`calc(50% + ${y}px)`;
+  const nx=x/joyRadius,ny=y/joyRadius;
+  keys.KeyA=nx<-.22;keys.KeyD=nx>.22;
+  keys.KeyW=ny<-.22;keys.KeyS=ny>.22;
+}
+function resetJoystick(){
+  joystickPointer=null;
+  joystickKnob.style.left='50%';joystickKnob.style.top='50%';
+  keys.KeyW=keys.KeyA=keys.KeyS=keys.KeyD=false;
+}
+moveArea.addEventListener('pointerdown',e=>{
+  if(!isMobile)return;
+  e.preventDefault();
+  if(joystickPointer!==null)return;
+  joystickPointer=e.pointerId;
+  const rect=joystickBase.getBoundingClientRect();
+  joyCenterX=rect.left+rect.width/2;joyCenterY=rect.top+rect.height/2;
+  moveArea.setPointerCapture(e.pointerId);updateJoystick(e.clientX,e.clientY);
+});
+moveArea.addEventListener('pointermove',e=>{
+  if(e.pointerId===joystickPointer){e.preventDefault();updateJoystick(e.clientX,e.clientY);}
+});
+moveArea.addEventListener('pointerup',e=>{if(e.pointerId===joystickPointer)resetJoystick();});
+moveArea.addEventListener('pointercancel',e=>{if(e.pointerId===joystickPointer)resetJoystick();});
+
+/* Свайп правой стороной экрана вращает камеру */
+const lookArea=document.getElementById('lookArea');
+let lookPointer=null,lastLookX=0,lastLookY=0;
+lookArea.addEventListener('pointerdown',e=>{
+  if(!isMobile||e.target.closest('button'))return;
+  e.preventDefault();lookPointer=e.pointerId;lastLookX=e.clientX;lastLookY=e.clientY;
+  lookArea.setPointerCapture(e.pointerId);
+});
+lookArea.addEventListener('pointermove',e=>{
+  if(e.pointerId!==lookPointer)return;
+  e.preventDefault();
+  const dx=e.clientX-lastLookX,dy=e.clientY-lastLookY;
+  lastLookX=e.clientX;lastLookY=e.clientY;
+  const sens=scopeZoomState===2?.0009:(scopeZoomState===1?.0015:.004);
+  yaw-=dx*sens;pitch-=dy*sens;
+  pitch=Math.max(-1.48,Math.min(1.48,pitch));
+});
+function endLook(e){if(e.pointerId===lookPointer)lookPointer=null;}
+lookArea.addEventListener('pointerup',endLook);
+lookArea.addEventListener('pointercancel',endLook);
+
+/* Кнопки оружия */
+document.querySelectorAll('[data-weapon]').forEach(btn=>{
+  btn.addEventListener('pointerdown',e=>{
+    e.preventDefault();e.stopPropagation();
+    setWeapon(Number(btn.dataset.weapon));
+    btn.classList.add('active');
+    setTimeout(()=>btn.classList.remove('active'),130);
+  });
+});
+
+/* Кнопки с удержанием */
+function holdButton(id,onStart,onEnd){
+  const btn=document.getElementById(id);
+  btn.addEventListener('pointerdown',e=>{
+    e.preventDefault();e.stopPropagation();
+    btn.setPointerCapture(e.pointerId);btn.classList.add('active');onStart();
+  });
+  const end=e=>{
+    e.preventDefault();btn.classList.remove('active');onEnd();
+  };
+  btn.addEventListener('pointerup',end);
+  btn.addEventListener('pointercancel',end);
+}
+holdButton('fireBtn',()=>{
+  isFiring=true;
+  const w=weapons[activeWeapon];
+  if(!w.auto){shoot();w._heldShot=true;}
+},()=>{isFiring=false;});
+
+holdButton('jumpBtn',()=>{if(onGround)keys.Space=true;},()=>{});
+holdButton('crouchBtn',()=>{keys.ControlLeft=true;},()=>{keys.ControlLeft=false;});
+holdButton('silentBtn',()=>{keys.ShiftLeft=true;},()=>{keys.ShiftLeft=false;});
+
+document.getElementById('reloadBtn').addEventListener('pointerdown',e=>{
+  e.preventDefault();e.stopPropagation();startReload();
+});
+document.getElementById('grenadeBtn').addEventListener('pointerdown',e=>{
+  e.preventDefault();e.stopPropagation();setWeapon(4);
+  const w=weapons[4];const now=performance.now();
+  if(now-w.lastShot>=w.delay){w.lastShot=now;throwGrenade();}
+});
+document.getElementById('scopeBtn').addEventListener('pointerdown',e=>{
+  e.preventDefault();e.stopPropagation();
+  if(activeWeapon!==3){setWeapon(3);showNotice('СНАЙПЕРСКАЯ ВИНТОВКА');}
+  else toggleScopeNextState();
+});
+
+addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){
+    isFiring=false;
+    if(isMobile)resetJoystick();
+  }
+});
+</script>
+</body>
+</html>
